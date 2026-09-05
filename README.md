@@ -1,67 +1,55 @@
-# Channel Post Preparer Bot
+# Telegram Channel Post Preparer (Python)
 
-An English-language Telegram bot that lets approved admins forward a post, cleans its caption without losing Telegram formatting, and prepares it for a selected channel. It supports text, photos, videos, documents, and animations.
+This is a **Python long-polling Telegram bot**, not a webhook application. It is designed to run as a Render **Background Worker**. The start command is exactly:
 
-## What it does
+```bash
+python bot.py
+```
 
-* Only owners and administrators can use the bot. Open **`/admin`** to access the control panel.
-* Add several destination channels, select one, or remove channels. The bot checks access when a channel is added.
-* Forward a post to the bot. It removes visible HTTP(S) links and rich-text links, replaces `@usernames` with the configured public username, and applies any number of case-insensitive `old => new` word replacements.
-* Telegram caption entities (bold, italic, underline, spoiler, code, block quote, and so on) are retained whenever text is transformed. If an admin manually edits the draft, that new text is intentionally plain.
-* The bot asks for the download link, then previews the cleaned post with **Download Now**, **Join Backup**, and **How to Download** buttons.
-* The following confirmation offers **Send**, **Edit post**, and **Change channel**. Sending publishes only to the channel selected for that draft.
+## Features
 
-## Telegram setup
+* `/admin` is restricted to owners and admins. Owners are defined with `OWNER_IDS`; owners can add other admins.
+* Add, choose, and remove multiple destination channels. The bot verifies it is a channel administrator before adding a channel.
+* Forward a text, photo, video, document, or animation post. The bot removes URLs, replaces all Telegram usernames with the configured username, and applies multiple custom `old => new` replacements.
+* Telegram formatting entities including bold, italic, code, spoiler, and block quotes are preserved when the automatic cleanup changes a caption.
+* The bot asks for a download link, previews the prepared post with **Download Now**, **Join Backup**, and **How to Download** buttons, and offers **Send**, **Edit post**, and **Change channel** controls.
+* MongoDB stores settings, administrator access, and in-progress drafts, so data survives a Render restart.
 
-1. Create a bot through **@BotFather** and copy its token.
-2. Start a private chat with the bot from every administrator account (Telegram bots cannot message a user who has never started them).
-3. Add the bot to every destination channel as an **administrator** with permission to post messages. Then use `/admin` → **Channels** → **Add channel** and send its `@channelusername` or numeric chat ID.
-4. Find your own numeric Telegram user ID (for example via an ID-info bot) and put it in `OWNER_IDS`. Owners are the first admins and cannot be removed through the UI.
-5. In `/admin` → **Settings**, configure the replacement public username, backup username, and how-to-download URL. In **Word replacements**, send entries such as:
+## Environment variables
 
-   ```text
-   Telegram => Instagram
-   old name => New Name
-   ```
+Copy `.env.example` to `.env` for local use and set these on Render:
 
-6. Owners may use `/admin` → **Admins** to add more admins by numeric Telegram user ID.
+| Variable | Required | Description |
+| --- | --- | --- |
+| `BOT_TOKEN` | Yes | Token from @BotFather. |
+| `MONGODB_URI` | Yes | MongoDB Atlas connection string. |
+| `OWNER_IDS` | Yes | Comma-separated numeric Telegram user IDs permitted to bootstrap administration. |
 
-## Local run
+There is no `WEBHOOK_URL`, `WEBHOOK_SECRET`, or web server configuration because this bot intentionally uses Telegram long polling.
+
+## Local setup
 
 ```bash
 cp .env.example .env
-npm install
-npm start
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+python bot.py
 ```
 
-When `WEBHOOK_URL` is empty the bot uses long polling, which is convenient locally. Do not run a local polling instance while the production webhook is active.
+## Deploy to Render (no webhook)
 
-## MongoDB Atlas
+1. Create a MongoDB Atlas database user and allow network access from Render. Copy the connection string as `MONGODB_URI`.
+2. Push this project to GitHub and create a Render **Background Worker** (not a Web Service).
+3. Select the Python runtime. Set **Build Command** to `pip install -r requirements.txt` and **Start Command** to `python bot.py`.
+4. Add `BOT_TOKEN`, `MONGODB_URI`, and `OWNER_IDS` in Render's Environment settings, then deploy.
+5. The included `render.yaml` declares the same worker settings if you use Render Blueprints. Never put real secrets in that file or commit `.env`.
+6. Open the bot chat as an owner, run `/admin`, add the bot as administrator in each target channel, then add those channels through **Channels**.
 
-1. Create a free MongoDB Atlas cluster and database user.
-2. In Atlas **Network Access**, allow Render to connect (for a simple first deployment, `0.0.0.0/0`; use a tighter rule if available to you).
-3. Copy the driver connection string, replace its password, and use it as `MONGODB_URI`. The application creates its collections automatically.
+The bot calls `delete_webhook` on startup and then continuously receives updates through long polling. Only run **one** instance for one bot token, otherwise Telegram will return a polling conflict.
 
-## Render deployment guide
+## Notes
 
-1. Push this repository to GitHub, then select **New → Web Service** in Render and connect the repository.
-2. Choose **Node**. Set Build Command to `npm install` and Start Command to `npm start`.
-3. Add these environment variables in Render:
-
-   | Variable | Value |
-   | --- | --- |
-   | `BOT_TOKEN` | Token supplied by BotFather |
-   | `MONGODB_URI` | MongoDB Atlas connection string |
-   | `OWNER_IDS` | One or more comma-separated numeric Telegram user IDs |
-   | `WEBHOOK_URL` | The final Render public URL, for example `https://my-post-bot.onrender.com` |
-   | `WEBHOOK_SECRET` | A long random, URL-safe value (for example 32+ random characters) |
-   | `PORT` | Leave unset; Render supplies it automatically |
-
-4. Deploy. On startup the app connects to MongoDB and registers `https://your-service/<WEBHOOK_SECRET>` with Telegram automatically. The `/` endpoint returns a health response for Render.
-5. After a redeploy, open `/admin` in Telegram and verify your configuration. Render free services can sleep, so the first incoming update after inactivity may take longer; a paid always-on instance avoids this delay.
-
-## Important notes
-
-* Never commit `.env`, your token, or MongoDB password. `.env.example` contains names only.
-* Telegram only provides a bot the post content it receives. Some protected-content channels cannot be forwarded, and Telegram may not expose original inline keyboard buttons; this bot creates the requested replacement buttons instead.
-* A forwarded post must include text or one of the supported single media types. Albums are handled by Telegram as separate messages and should be forwarded item by item.
+* Administrators must start a private chat with the bot before it can reply to them.
+* Telegram protected-content posts cannot be forwarded. Original inline buttons may not be accessible to bots; the bot creates the three requested replacement buttons instead.
+* Albums arrive as separate Telegram messages and should be forwarded individually.
