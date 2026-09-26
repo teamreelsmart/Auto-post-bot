@@ -49,7 +49,7 @@ Message a trusted Telegram ID bot such as `@userinfobot`, then copy the numeric 
 ## Deploy to Vercel
 
 1. Push the project to GitHub, GitLab, or Bitbucket.
-2. In Vercel, choose **Add New → Project**, import the repository, and deploy it as a Node.js project.
+2. In Vercel, choose **Add New → Project**, import the repository, and select the **Node.js** Framework Preset. Do **not** select Next.js or Nest.js: this is a Node.js serverless-functions project, not a Next/Nest application. The root `index.ts` health endpoint is included specifically so the Node.js preset finds an entrypoint; Telegram traffic still goes to `/api/webhook`.
 3. In **Project Settings → Environment Variables**, add every value from `.env.example`. Add them for Production (and Preview if desired).
 4. Redeploy after saving the variables.
 5. Copy the production URL, for example `https://your-project.vercel.app`.
